@@ -1,4 +1,4 @@
-name: Full APK Deep Scanner
+name: Full APK Deep Scanner Clean
 
 on:
   workflow_dispatch:
@@ -10,16 +10,16 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Run Full Scanner Script
+      - name: Run Clean Scanner Script
         run: |
           python3 -c '
           import os
           import zipfile
 
-          print("[*] بدء عملية الفحص الشامل لتطبيق Airvoy...")
+          print("[*] بدء الفحص الشامل بنظام تنقية النصوص...")
           zip_files = [f for f in os.listdir(".") if f.endswith(".zip")]
           if not zip_files:
-              print("[-] لم يتم العثور على ملف مضغوط في المجلد الحالي.")
+              print("[-] لم يتم العثور على ملف مضغوط.")
               exit(1)
 
           with zipfile.ZipFile(zip_files[0], "r") as zf:
@@ -32,18 +32,14 @@ jobs:
                       apk_files.append(os.path.join(root, file))
 
           if not apk_files:
-              print("[-] لم يتم العثور على ملف APK داخل الملف المضغوط.")
+              print("[-] لم يتم العثور على ملف APK.")
               exit(1)
 
           apk_path = apk_files[0]
-          print(f"[+] تم استخراج ملف الـ APK بنجاح: {apk_path}")
-          
           unpacked_dir = "unpacked_apk_sources"
           os.makedirs(unpacked_dir, exist_ok=True)
           with zipfile.ZipFile(apk_path, "r") as apk_z:
               apk_z.extractall(unpacked_dir)
-          
-          print("[+] جاري فحص جميع الملفات (JavaScript, Smali, JSON, XML) حرفاً حرفاً...")
           
           keywords = [
               "login", "signin", "auth", "token", "password", 
@@ -54,30 +50,31 @@ jobs:
           results = []
           for root, dirs, files in os.walk(unpacked_dir):
               for file in files:
-                  if file.endswith((".js", ".json", ".xml", ".smali", ".properties", ".txt", ".html")):
+                  if file.endswith((".js", ".json", ".xml", ".txt", ".html")):
                       file_path = os.path.join(root, file)
                       try:
                           with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                              content = f.read()
-                              found_kw = [kw for kw in keywords if kw in content.lower()]
-                              if found_kw:
-                                  results.append(f"الملف: {file_path}\nالكلمات المكتشفة: {found_kw}\n" + "-"*50)
+                              lines = f.readlines()
+                              for line_num, line in enumerate(lines, 1):
+                                  for kw in keywords:
+                                      if kw in line.lower():
+                                          results.append(f"الملف: {file_path} (السطر: {line_num})\nالمحتوى: {line.strip()}\n" + "-"*40)
                       except Exception:
                           pass
 
-          report_file = "scan_results.txt"
+          report_file = "scan_results_clean.txt"
           with open(report_file, "w", encoding="utf-8") as report:
-              report.write("=== تقرير الفحص الشامل والتحليل العميق لتطبيق Airvoy ===\n\n")
+              report.write("=== تقرير مسح مسارات تسجيل الدخول والروابط النظيف ===\n\n")
               if results:
-                  report.write("\n".join(results))
+                  report.write("\n".join(results[:500])) # أول 500 نتيجة حتى يكون الملف واضح ومقروء
               else:
-                  report.write("لم يتم العثور على تطابقات مطابقة.\n")
+                  report.write("لم يتم العثور على نتائج مطابقة.\n")
 
-          print(f"[تم الانتهاء] تم حفظ النتائج في: {report_file}")
+          print(f"[تم الانتهاء] حفظ التقرير النظيف في: {report_file}")
           '
 
-      - name: Upload Scan Results Report
+      - name: Upload Clean Report
         uses: actions/upload-artifact@v4
         with:
-          name: airvoy-scan-results
-          path: scan_results.txt
+          name: airvoy-clean-results
+          path: scan_results_clean.txt
