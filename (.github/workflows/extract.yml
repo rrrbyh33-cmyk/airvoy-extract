@@ -1,18 +1,73 @@
-name: Scan APK Structure
+name: Telegram APK Endpoint Extractor
 
 on:
   workflow_dispatch:
+    inputs:
+      telegram_file_url:
+        description: 'رابط ملف الـ APK المباشر من التليجرام'
+        required: true
+        type: string
 
 jobs:
-  scan:
+  extract:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Python Diagnostic Scan
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Download APK from Telegram & Extract
         run: |
+          import urllib.request
+          import zipfile
+          import re
           import os
-          print("🚀 GitHub Actions environment is ready!")
-          print("Current directory files:", os.listdir('.'))
+
+          url = "${{ github.event.inputs.telegram_file_url }}"
+          print(f"📥 Downloading APK from Telegram...")
+          
+          apk_path = "app.apk"
+          urllib.request.urlretrieve(url, apk_path)
+          print("✅ Download complete!")
+
+          extract_dir = "extracted_apk"
+          os.makedirs(extract_dir, exist_ok=True)
+
+          print("📦 Extracting APK contents...")
+          with zipfile.ZipFile(apk_path, 'r') as zip_ref:
+              zip_ref.extractall(extract_dir)
+
+          print("🔍 Scanning for API and Login endpoints...")
+          found_urls = set()
+          
+          ignored_domains = [
+              "android.com", "w3.org", "google.com", "googleapis.com", 
+              "example.com", "adobe.com", "schema.org", "unity3d.com",
+              "vungle.com", "bytedance.com", "dashif.org", "tizen.org"
+          ]
+
+          for root, dirs, files in os.walk(extract_dir):
+              for file in files:
+                  file_path = os.path.join(root, file)
+                  try:
+                      with open(file_path, "rb") as f:
+                          content = f.read()
+                          urls = re.findall(rb'https?://[^\s<>"]+|www\.[^\s<>"]+', content)
+                          for u in urls:
+                              url_str = u.decode('utf-8', errors='ignore')
+                              if not any(domain in url_str for domain in ignored_domains):
+                                  found_urls.add(url_str)
+                  except Exception:
+                      pass
+
+          print("\n" + "="*40)
+          print("🎯 TARGET API & LOGIN ENDPOINTS FOUND:")
+          print("="*40)
+          for u in sorted(found_urls):
+              print(u)
+          print("="*40)
         shell: python
