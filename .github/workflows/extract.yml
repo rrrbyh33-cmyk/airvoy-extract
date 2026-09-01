@@ -1,67 +1,83 @@
-import os
-import zipfile
-import re
+name: Full APK Deep Scanner
 
-def analyze_apk_deeply():
-    print("[*] جاري البحث عن ملف الـ APK بالمستودع...")
-    zip_files = [f for f in os.listdir('.') if f.endswith('.zip')]
-    if not zip_files:
-        print("[-] لم يتم العثور على ملف مضغوط.")
-        return
+on:
+  workflow_dispatch:
 
-    # فك ملف الـ ZIP الأولي
-    with zipfile.ZipFile(zip_files[0], 'r') as zf:
-        zf.extractall('extracted_zip')
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    apk_files = []
-    for root, dirs, files in os.walk('extracted_zip'):
-        for file in files:
-            if file.endswith('.apk'):
-                apk_files.append(os.path.join(root, file))
+      - name: Run Full Scanner Script
+        run: |
+          python3 -c '
+          import os
+          import zipfile
 
-    if not apk_files:
-        print("[-] لم يتم العثور على ملف APK داخل الـ ZIP.")
-        return
+          print("[*] بدء عملية الفحص الشامل لتطبيق Airvoy...")
+          zip_files = [f for f in os.listdir(".") if f.endswith(".zip")]
+          if not zip_files:
+              print("[-] لم يتم العثور على ملف مضغوط في المجلد الحالي.")
+              exit(1)
 
-    apk_path = apk_files[0]
-    print(f"[+] تم العثور على الـ APK: {apk_path}")
-    
-    # فك الـ APK باستخدام الأوامر الداخلية لنظام Linux (Unzip العادي للـ APK كونه مجلد ضغط)
-    os.makedirs('unpacked_source', exist_ok=True)
-    with zipfile.ZipFile(apk_path, 'r') as apk_z:
-        apk_z.extractall('unpacked_source')
-    
-    print("[+] جاري فحص جميع الملفات الداخلية حرفاً حرفاً...")
-    
-    # قائمة الكلمات المستهدفة بدقة لتسجيل الدخول والروابط المخفية
-    keywords = ['login', 'signin', 'auth', 'token', 'password', 'u5iV1', 'render.com', 'api/v', 'base_url', 'endpoint']
-    
-    found_results = {}
-    
-    for root, dirs, files in os.walk('unpacked_source'):
-        for file in files:
-            # نهتم بملفات الكود والكونفجريشن والـ JSON والـ JS والـ XML
-            if file.endswith(('.js', '.json', '.xml', '.smali', '.properties', '.txt')):
-                file_path = os.path.join(root, file)
-                try:
-                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        content = f.read()
-                        for kw in keywords:
-                            if kw in content.lower():
-                                if file_path not in found_results:
-                                    found_results[file_path] = []
-                                found_results[file_path].append(kw)
-                except Exception:
-                    pass
+          with zipfile.ZipFile(zip_files[0], "r") as zf:
+              zf.extractall("extracted_zip")
 
-    print("\n=========================================")
-    print("       نتائج التحليل العميق والشامل       ")
-    print("=========================================")
-    
-    for path, matches in found_results.items():
-        print(f"[الملف]: {path}")
-        print(f"[الكلمات المكتشفة]: {set(matches)}")
-        print("-" * 40)
+          apk_files = []
+          for root, dirs, files in os.walk("extracted_zip"):
+              for file in files:
+                  if file.endswith(".apk"):
+                      apk_files.append(os.path.join(root, file))
 
-if __name__ == "__main__":
-    analyze_apk_deeply()
+          if not apk_files:
+              print("[-] لم يتم العثور على ملف APK داخل الملف المضغوط.")
+              exit(1)
+
+          apk_path = apk_files[0]
+          print(f"[+] تم استخراج ملف الـ APK بنجاح: {apk_path}")
+          
+          unpacked_dir = "unpacked_apk_sources"
+          os.makedirs(unpacked_dir, exist_ok=True)
+          with zipfile.ZipFile(apk_path, "r") as apk_z:
+              apk_z.extractall(unpacked_dir)
+          
+          print("[+] جاري فحص جميع الملفات (JavaScript, Smali, JSON, XML) حرفاً حرفاً...")
+          
+          keywords = [
+              "login", "signin", "auth", "token", "password", 
+              "u5iV1", "render.com", "api", "base_url", "endpoint",
+              "firebase", "identitytoolkit", "oauth"
+          ]
+          
+          results = []
+          for root, dirs, files in os.walk(unpacked_dir):
+              for file in files:
+                  if file.endswith((".js", ".json", ".xml", ".smali", ".properties", ".txt", ".html")):
+                      file_path = os.path.join(root, file)
+                      try:
+                          with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                              content = f.read()
+                              found_kw = [kw for kw in keywords if kw in content.lower()]
+                              if found_kw:
+                                  results.append(f"الملف: {file_path}\nالكلمات المكتشفة: {found_kw}\n" + "-"*50)
+                      except Exception:
+                          pass
+
+          report_file = "scan_results.txt"
+          with open(report_file, "w", encoding="utf-8") as report:
+              report.write("=== تقرير الفحص الشامل والتحليل العميق لتطبيق Airvoy ===\n\n")
+              if results:
+                  report.write("\n".join(results))
+              else:
+                  report.write("لم يتم العثور على تطابقات مطابقة.\n")
+
+          print(f"[تم الانتهاء] تم حفظ النتائج في: {report_file}")
+          '
+
+      - name: Upload Scan Results Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: airvoy-scan-results
+          path: scan_results.txt
