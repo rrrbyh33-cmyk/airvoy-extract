@@ -16,13 +16,13 @@ jobs:
           mkdir -p extracted_files
           unzip -q "$ZIP_FILE" -d extracted_files/
           
-          # فك ملف الـ APK استخراجاً سريعاً لاستخراج مجلد الـ assets
           APK_FILE=$(find extracted_files/ -name "*.apk" | head -n 1)
           unzip -q "$APK_FILE" -d unpacked_apk/
           
           echo "========================================="
-          echo "[+] البحث داخل ملفات الـ JavaScript والـ Assets عن الروابط والدوال:"
+          echo "[+] الروابط وكلمات الـ API الصريحة داخل ملفات الـ JS:"
           echo "========================================="
           
-          # البحث عن أي كلمة fetch أو axios أو render داخل ملفات الـ js
-          grep -rnwiE "fetch|axios|POST|GET|render" unpacked_apk/assets/ || echo "[-] لم يتم العثور على تطابقات مباشرة بملفات الـ assets."
+          # استخراج الروابط بالكامل أو أي نص يحتوي على render أو api داخل مجلد الأستوديو
+          grep -oE "https?://[a-zA-Z0-9./_-]+" unpacked_apk/assets/ad-viewer/* | sort -u
+          grep -oE "[a-zA-Z0-9_-]*(api|login|auth|v1)[a-zA-Z0-9_-]*" unpacked_apk/assets/ad-viewer/* | sort -u
