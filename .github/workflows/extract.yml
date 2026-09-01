@@ -1,21 +1,20 @@
-name: Extract Exact Login Endpoints
+name: Extract Real App Endpoints Only
 
 on:
   workflow_dispatch:
 
 jobs:
-  extract-urls:
+  extract-real-urls:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Grep URLs from Target JS Files
+      - name: Deep Scan Core App Files
         run: |
           python3 -c '
           import os, zipfile, re
 
-          # فك الملفات إذا لم تكن مفكوكة
           zip_files = [f for f in os.listdir(".") if f.endswith(".zip")]
           if zip_files:
               with zipfile.ZipFile(zip_files[0], "r") as zf:
@@ -27,15 +26,22 @@ jobs:
                       with zipfile.ZipFile(os.path.join(root, file), "r") as apk_z:
                           apk_z.extractall("unpacked_apk_sources")
 
-          target_file = "unpacked_apk_sources/assets/ad-viewer/adViewer.366d40a1.js"
-          if os.path.exists(target_file):
-              print(f"=== فحص الملف الأساسي: {target_file} ===")
-              with open(target_file, "r", encoding="utf-8", errors="ignore") as f:
-                  content = f.read()
-                  # البحث عن أي رابط أو مسار API داخل الملف
-                  urls = re.findall(r"https?://[^\s\"<>]+|/[a-zA-Z0-9_/-]+(?:api|auth|login|v1)[^\s\"<>]*", content)
-                  for u in sorted(set(urls)):
-                      print(f"[رابط مكتشف]: {u}")
-          else:
-              print("[-] لم يتم العثور على الملف بالمجلد المحدد.")
+          print("=== البحث عن الروابط في الكود الأساسي (استثناء الإعلانات) ===")
+          for root, dirs, files in os.walk("unpacked_apk_sources"):
+              # نتجاهل مجلدات الإعلانات كلياً
+              if "ad-viewer" in root or "unity" in root:
+                  continue
+              for file in files:
+                  if file.endswith((".js", ".json", ".dart", ".ts")):
+                      file_path = os.path.join(root, file)
+                      try:
+                          with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                              content = f.read()
+                              # البحث عن الروابط أو مسارات الباك إند
+                              urls = re.findall(r"https?://[^\s\"<>]+|/[a-zA-Z0-9_/-]+(?:api|auth|login|v1|user)[^\s\"<>]*", content)
+                              for u in set(urls):
+                                  if "render.com" in u or "airvoy" in u or "api" in u:
+                                      print(f"[هدف حقيقي]: {file_path} --> {u}")
+                      except Exception:
+                          pass
           '
