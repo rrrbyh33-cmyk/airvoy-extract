@@ -1,4 +1,4 @@
-name: Extract All Strings and Endpoints
+name: Find Login Endpoints Exact
 on:
   workflow_dispatch:
 jobs:
@@ -20,7 +20,12 @@ jobs:
           with zipfile.ZipFile(zip_files[0], 'r') as z:
               z.extractall(extract_dir)
 
-          found_endpoints = set()
+          login_endpoints = set()
+          patterns = [
+              r'["\'](/api/v[0-9]+/[^"\']*(?:login|auth|signin|token)[^"\']*)["\']',
+              r'["\'](https?://[^"\']*(?:login|auth|signin|token)[^"\']*)["\']',
+              r'["\'](/[a-zA-Z0-9_/-]*(?:login|auth|signin|token)[^"\']*)["\']'
+          ]
 
           for root, dirs, files in os.walk(extract_dir):
               for file in files:
@@ -28,19 +33,18 @@ jobs:
                       file_path = os.path.join(root, file)
                       with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                           content = f.read()
-                          # استخراج أي شيء يبدأ بـ http أو https بطول مقبول
-                          urls = re.findall(r'https?://[^\s<>"\']+', content)
-                          for u in urls:
-                              u_clean = u.strip().rstrip('.,;:)]}\'"')
-                              if len(u_clean) > 10 and not any(x in u_clean.lower() for x in ['android.com', 'w3.org', 'google', 'github', 'schema', 'example']):
-                                  found_endpoints.add(u_clean)
+                          for p in patterns:
+                              matches = re.findall(p, content, re.IGNORECASE)
+                              for m in matches:
+                                  if len(m) > 4 and not 'android' in m.lower() and not 'google' in m.lower():
+                                      login_endpoints.add(m)
                   except:
                       pass
 
           print("\n" + "="*60)
-          print(f"🎯 ALL FOUND URLS ({len(found_endpoints)} found):")
+          print(f"🎯 EXACT LOGIN API ENDPOINTS ({len(login_endpoints)} found):")
           print("="*60)
-          for ep in sorted(found_endpoints):
+          for ep in sorted(login_endpoints):
               print(ep)
           print("="*60)
         shell: python
