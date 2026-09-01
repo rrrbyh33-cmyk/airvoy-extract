@@ -1,0 +1,18 @@
+name: Scan APK Structure
+
+on:
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Python Diagnostic Scan
+        run: |
+          import os
+          print("🚀 GitHub Actions environment is ready!")
+          print("Current directory files:", os.listdir('.'))
+        shell: python
