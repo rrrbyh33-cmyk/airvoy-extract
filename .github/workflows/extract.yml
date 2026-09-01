@@ -1,4 +1,4 @@
-name: Extract and Save Clean URLs
+name: Extract Clean API URLs to Console
 
 on:
   workflow_dispatch:
@@ -23,6 +23,7 @@ jobs:
 
           zip_files = [f for f in os.listdir('.') if f.endswith('.zip') and 'Airvoy' in f]
           if not zip_files:
+              print("No zip found!")
               exit(1)
               
           target_zip = zip_files[0]
@@ -33,38 +34,30 @@ jobs:
               zip_ref.extractall(extract_dir)
 
           found_urls = set()
-          ignored = ["android.com", "w3.org", "google.com", "googleapis.com", "example.com", "adobe.com", "schema.org", "pki.goog", "iptc.org"]
+          ignored = ["android.com", "w3.org", "google.com", "googleapis.com", "example.com", "adobe.com", "schema.org", "pki.goog", "iptc.org", "github.com"]
 
-          # تعبير نمطي دقيق جداً لالتقاط الروابط الصافية حصراً
-          url_pattern = re.compile(rb'https?://[a-zA-Z0-9][-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)')
-
+          # بحث بسيط ونظيف عن الروابط النصية الصريحة داخل كل الملفات
           for root, dirs, files in os.walk(extract_dir):
               for file in files:
                   try:
                       file_path = os.path.join(root, file)
-                      with open(file_path, "rb") as f:
+                      # نقرأ الملف كنص مع تجاهل البايتات التالفة لضمان عدم ظهور رموز غريبة
+                      with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                           content = f.read()
-                          matches = url_pattern.findall(content)
-                          for m in matches:
-                              # استخراج الرابط الكامل وتصحيحه
-                              full_match = re.search(rb'https?://[^\s<>"\']+', m if b'http' in m else b'http://' + m)
-                              if full_match:
-                                  url_str = full_match.group(0).decode('utf-8', errors='ignore').strip()
-                                  # تنظيف الرموز الزائدة بالنهاية
-                                  url_str = re.sub(r'[\),\]\}]+$', '', url_str)
-                                  if len(url_str) > 10 and not any(d in url_str for d in ignored):
-                                      found_urls.add(url_str)
+                          # استخراج الروابط بجميع أنواعها
+                          urls = re.findall(r'https?://[^\s<>"\']+|www\.[^\s<>"\']+', content)
+                          for u in urls:
+                              # تنظيف الروابط من أي رموز إضافية علوية أو جانبية
+                              clean_u = u.strip().rstrip('.,;:)]}\'"')
+                              if len(clean_u) > 8 and not any(d in clean_u for d in ignored):
+                                  found_urls.add(clean_u)
                   except:
                       pass
 
-          with open("urls.txt", "w", encoding="utf-8") as out:
-              for u in sorted(found_urls):
-                  out.write(u + "\n")
-          print(f"✅ Found {len(found_urls)} clean URLs.")
+          print("\n" + "="*60)
+          print(f"🎯 FOUND {len(found_urls)} CLEAN API/LOGIN URLS:")
+          print("="*60)
+          for u in sorted(found_urls):
+              print(u)
+          print("="*60)
         shell: python
-
-      - name: Upload URLs Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: airvoy-clean-endpoints
-          path: urls.txt
