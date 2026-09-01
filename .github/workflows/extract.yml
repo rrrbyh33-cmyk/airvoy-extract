@@ -1,28 +1,28 @@
-name: Search and Extract Endpoints
+name: Extract JS Endpoints
 
 on:
   workflow_dispatch:
 
 jobs:
-  extract-and-find:
+  find-js-routes:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Extract APK Strings and Search
+      - name: Extract and Search JS Files
         run: |
-          echo "[*] جاري البحث عن ملف الـ APK..."
           ZIP_FILE=$(find . -name "*.zip" | head -n 1)
           mkdir -p extracted_files
           unzip -q "$ZIP_FILE" -d extracted_files/
           
+          # فك ملف الـ APK استخراجاً سريعاً لاستخراج مجلد الـ assets
           APK_FILE=$(find extracted_files/ -name "*.apk" | head -n 1)
-          echo "[*] تم العثور على ملف APK: $APK_FILE"
+          unzip -q "$APK_FILE" -d unpacked_apk/
           
           echo "========================================="
-          echo "[+] استخراج النصوص والروابط من الـ APK:"
+          echo "[+] البحث داخل ملفات الـ JavaScript والـ Assets عن الروابط والدوال:"
           echo "========================================="
           
-          # استخراج النصوص الصريحة والبحث عن الروابط والكلمات المفتاحية
-          strings "$APK_FILE" | grep -iE "https?://|api|login|render|auth|v1|u5iV1" || echo "[-] لم يتم العثور على مطابقات."
+          # البحث عن أي كلمة fetch أو axios أو render داخل ملفات الـ js
+          grep -rnwiE "fetch|axios|POST|GET|render" unpacked_apk/assets/ || echo "[-] لم يتم العثور على تطابقات مباشرة بملفات الـ assets."
