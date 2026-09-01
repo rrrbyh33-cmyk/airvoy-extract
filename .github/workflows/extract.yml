@@ -1,28 +1,67 @@
-name: Extract JS Endpoints
+import os
+import zipfile
+import re
 
-on:
-  workflow_dispatch:
+def analyze_apk_deeply():
+    print("[*] جاري البحث عن ملف الـ APK بالمستودع...")
+    zip_files = [f for f in os.listdir('.') if f.endswith('.zip')]
+    if not zip_files:
+        print("[-] لم يتم العثور على ملف مضغوط.")
+        return
 
-jobs:
-  find-js-routes:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+    # فك ملف الـ ZIP الأولي
+    with zipfile.ZipFile(zip_files[0], 'r') as zf:
+        zf.extractall('extracted_zip')
 
-      - name: Extract and Search JS Files
-        run: |
-          ZIP_FILE=$(find . -name "*.zip" | head -n 1)
-          mkdir -p extracted_files
-          unzip -q "$ZIP_FILE" -d extracted_files/
-          
-          APK_FILE=$(find extracted_files/ -name "*.apk" | head -n 1)
-          unzip -q "$APK_FILE" -d unpacked_apk/
-          
-          echo "========================================="
-          echo "[+] الروابط وكلمات الـ API الصريحة داخل ملفات الـ JS:"
-          echo "========================================="
-          
-          # استخراج الروابط بالكامل أو أي نص يحتوي على render أو api داخل مجلد الأستوديو
-          grep -oE "https?://[a-zA-Z0-9./_-]+" unpacked_apk/assets/ad-viewer/* | sort -u
-          grep -oE "[a-zA-Z0-9_-]*(api|login|auth|v1)[a-zA-Z0-9_-]*" unpacked_apk/assets/ad-viewer/* | sort -u
+    apk_files = []
+    for root, dirs, files in os.walk('extracted_zip'):
+        for file in files:
+            if file.endswith('.apk'):
+                apk_files.append(os.path.join(root, file))
+
+    if not apk_files:
+        print("[-] لم يتم العثور على ملف APK داخل الـ ZIP.")
+        return
+
+    apk_path = apk_files[0]
+    print(f"[+] تم العثور على الـ APK: {apk_path}")
+    
+    # فك الـ APK باستخدام الأوامر الداخلية لنظام Linux (Unzip العادي للـ APK كونه مجلد ضغط)
+    os.makedirs('unpacked_source', exist_ok=True)
+    with zipfile.ZipFile(apk_path, 'r') as apk_z:
+        apk_z.extractall('unpacked_source')
+    
+    print("[+] جاري فحص جميع الملفات الداخلية حرفاً حرفاً...")
+    
+    # قائمة الكلمات المستهدفة بدقة لتسجيل الدخول والروابط المخفية
+    keywords = ['login', 'signin', 'auth', 'token', 'password', 'u5iV1', 'render.com', 'api/v', 'base_url', 'endpoint']
+    
+    found_results = {}
+    
+    for root, dirs, files in os.walk('unpacked_source'):
+        for file in files:
+            # نهتم بملفات الكود والكونفجريشن والـ JSON والـ JS والـ XML
+            if file.endswith(('.js', '.json', '.xml', '.smali', '.properties', '.txt')):
+                file_path = os.path.join(root, file)
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
+                        for kw in keywords:
+                            if kw in content.lower():
+                                if file_path not in found_results:
+                                    found_results[file_path] = []
+                                found_results[file_path].append(kw)
+                except Exception:
+                    pass
+
+    print("\n=========================================")
+    print("       نتائج التحليل العميق والشامل       ")
+    print("=========================================")
+    
+    for path, matches in found_results.items():
+        print(f"[الملف]: {path}")
+        print(f"[الكلمات المكتشفة]: {set(matches)}")
+        print("-" * 40)
+
+if __name__ == "__main__":
+    analyze_apk_deeply()
