@@ -1,4 +1,4 @@
-name: Find Login Endpoints Exact
+name: Extract Flutter API Routes
 on:
   workflow_dispatch:
 jobs:
@@ -20,12 +20,7 @@ jobs:
           with zipfile.ZipFile(zip_files[0], 'r') as z:
               z.extractall(extract_dir)
 
-          login_endpoints = set()
-          patterns = [
-              r'["\'](/api/v[0-9]+/[^"\']*(?:login|auth|signin|token)[^"\']*)["\']',
-              r'["\'](https?://[^"\']*(?:login|auth|signin|token)[^"\']*)["\']',
-              r'["\'](/[a-zA-Z0-9_/-]*(?:login|auth|signin|token)[^"\']*)["\']'
-          ]
+          api_routes = set()
 
           for root, dirs, files in os.walk(extract_dir):
               for file in files:
@@ -33,18 +28,18 @@ jobs:
                       file_path = os.path.join(root, file)
                       with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                           content = f.read()
-                          for p in patterns:
-                              matches = re.findall(p, content, re.IGNORECASE)
-                              for m in matches:
-                                  if len(m) > 4 and not 'android' in m.lower() and not 'google' in m.lower():
-                                      login_endpoints.add(m)
+                          # البحث عن أي مسارات برمجيّة أو نسبية للـ API مثل /api/... أو /v1/...
+                          matches = re.findall(r'["\'](/[a-zA-Z0-9_\-/]+(?:api|v[0-9]|auth|login|signin|user|account)[a-zA-Z0-9_\-/]*)["\']', content, re.IGNORECASE)
+                          for m in matches:
+                              if len(m) > 4:
+                                  api_routes.add(m)
                   except:
                       pass
 
           print("\n" + "="*60)
-          print(f"🎯 EXACT LOGIN API ENDPOINTS ({len(login_endpoints)} found):")
+          print(f"🎯 FOUND API ROUTES ({len(api_routes)} found):")
           print("="*60)
-          for ep in sorted(login_endpoints):
-              print(ep)
+          for r in sorted(api_routes):
+              print(r)
           print("="*60)
         shell: python
