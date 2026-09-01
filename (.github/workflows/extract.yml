@@ -1,9 +1,9 @@
-name: Telegram APK Endpoint Extractor
+name: Extract Real API from Telegram APK
 
 on:
   workflow_dispatch:
     inputs:
-      telegram_file_url:
+      telegram_apk_url:
         description: 'رابط ملف الـ APK المباشر من التليجرام'
         required: true
         type: string
@@ -20,54 +20,83 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Download APK from Telegram & Extract
+      - name: Download, Extract, and Scan APK
         run: |
           import urllib.request
           import zipfile
           import re
           import os
+          import glob
 
-          url = "${{ github.event.inputs.telegram_file_url }}"
+          telegram_url = "${{ github.event.inputs.telegram_apk_url }}"
+          apk_name = "target.apk"
+
           print(f"📥 Downloading APK from Telegram...")
-          
-          apk_path = "app.apk"
-          urllib.request.urlretrieve(url, apk_path)
-          print("✅ Download complete!")
+          try:
+              urllib.request.urlretrieve(telegram_url, apk_name)
+              print("✅ Download complete!")
+          except Exception as e:
+              print(f"❌ Download failed: {e}")
+              exit(1)
 
           extract_dir = "extracted_apk"
           os.makedirs(extract_dir, exist_ok=True)
 
           print("📦 Extracting APK contents...")
-          with zipfile.ZipFile(apk_path, 'r') as zip_ref:
-              zip_ref.extractall(extract_dir)
+          try:
+              with zipfile.ZipFile(apk_name, 'r') as zip_ref:
+                  zip_ref.extractall(extract_dir)
+          except Exception as e:
+              print(f"❌ Extraction failed: {e}")
+              # محاولة ثانية بفك الضغط إذا كان الملف مضغوط خارجي
+              pass
 
-          print("🔍 Scanning for API and Login endpoints...")
+          print("🔍 Scanning for API endpoints and URLs (filtering out noise)...")
           found_urls = set()
           
+          # قائمة بالمكتبات والخدمات الشائعة التي يجب تجاهلها (مثل الإعلانات والتحليلات)
           ignored_domains = [
               "android.com", "w3.org", "google.com", "googleapis.com", 
               "example.com", "adobe.com", "schema.org", "unity3d.com",
-              "vungle.com", "bytedance.com", "dashif.org", "tizen.org"
+              "vungle.com", "bytedance.com", "dashif.org", "tizen.org",
+              "facebook.com", "crashlytics.com", "app-measurement.com",
+              "tenor.com", "facebook.net", "gvt1.com", "openai.com",
+              "fbsbx.com", "amazon-adsystem.com", "pubnative.net"
           ]
 
+          file_count = 0
+          match_count = 0
+
+          # البحث في كل ملفات الـ APK المستخرجة (بما فيها ملفات الـ DEX وملفات الفلاتر)
           for root, dirs, files in os.walk(extract_dir):
               for file in files:
                   file_path = os.path.join(root, file)
                   try:
                       with open(file_path, "rb") as f:
                           content = f.read()
-                          urls = re.findall(rb'https?://[^\s<>"]+|www\.[^\s<>"]+', content)
+                          # البحث عن الروابط باستخدام تعبير منتظم قوي (Regex)
+                          # يلتقط روابط http:// و https:// و www.
+                          urls = re.findall(rb'https?://[^\s<>"\',]+|www\.[^\s<>"\',]+', content)
                           for u in urls:
                               url_str = u.decode('utf-8', errors='ignore')
-                              if not any(domain in url_str for domain in ignored_domains):
-                                  found_urls.add(url_str)
+                              
+                              # تصفية النتائج: يجب أن يحتوي الرابط على شيء يخص التطبيق (غير فارغ ولا HTTP عادي)
+                              if "://" in url_str:
+                                  # تصفية النطاقات غير المرغوب فيها
+                                  if not any(domain in url_str for domain in ignored_domains):
+                                      found_urls.add(url_str)
+                                      match_count += 1
+                      file_count += 1
                   except Exception:
                       pass
 
-          print("\n" + "="*40)
-          print("🎯 TARGET API & LOGIN ENDPOINTS FOUND:")
-          print("="*40)
-          for u in sorted(found_urls):
-              print(u)
-          print("="*40)
+          print(f"\n📊 Scanned {file_count} files. Found {match_count} potential endpoints.\n")
+          print("="*60)
+          print("🎯 TARGET API & LOGIN ENDPOINTS FOUND (Cleaned List):")
+          print("="*60)
+          # طباعة النتائج مرتبة
+          for url in sorted(found_urls):
+              print(url)
+          print("="*60)
+          print("\n✅ Analysis complete. Use these URLs to fix the 404 error.")
         shell: python
