@@ -1,7 +1,12 @@
-name: Extract from Google Play
+name: Direct APK Extractor
 
 on:
   workflow_dispatch:
+    inputs:
+      apk_url:
+        description: 'خلي رابط التحميل المباشر هنا'
+        required: true
+        type: string
 
 jobs:
   extract:
@@ -12,47 +17,23 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install Google Play Scraper
+      - name: Download & Extract APK
         run: |
-          pip install google-play-scraper
-
-      - name: Download & Extract APK from Google Play
-        run: |
-          import os
+          import urllib.request
           import zipfile
           import re
-          from google_play_scraper import app
-          import urllib.request
+          import os
 
-          # حزمة تطبيق Airvoy في المتجر
-          package_name = "com.airvoy.airvoy"
-          print(f"🔍 Looking up {package_name} on Google Play...")
+          url = "${{ github.event.inputs.apk_url }}"
+          print(f"📥 Downloading from: {url}")
           
-          try:
-              # جلب معلومات التطبيق ورابط التحميل المباشر إن توفر، أو نستخدم أداة سحب بديلة
-              result = app(package_name, lang='en', country='us')
-              print(f"📱 App Name: {result.get('title')}")
-              print(f"📦 Version: {result.get('version')}")
-          except Exception as e:
-              print(f"⚠️ Note: {e}")
-
-          # بما أن متجر جوجل لا يعطي رابط مباشر للتحميل السريع بدون حساب، 
-          # الأسهل نستخدم رابط بديل موثوق لسحب ملف الـ APK عبر حزم الـ APK Downloader APIs
-          apk_download_url = f"https://d.apkpure.com/b/APK/{package_name}?version=latest"
-          
-          print(f"📥 Downloading APK from mirror...")
           apk_path = "app.apk"
-          
           headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-          req = urllib.request.Request(apk_download_url, headers=headers)
+          req = urllib.request.Request(url, headers=headers)
           
-          try:
-              with urllib.request.urlopen(req) as response, open(apk_path, 'wb') as out_file:
-                  out_file.write(response.read())
-              print("✅ Download complete!")
-          except Exception as e:
-              print(f"❌ Failed to download: {e}")
-              exit(1)
+          with urllib.request.urlopen(req) as response, open(apk_path, 'wb') as out_file:
+              out_file.write(response.read())
+          print("✅ Download complete!")
 
           extract_dir = "extracted_apk"
           os.makedirs(extract_dir, exist_ok=True)
@@ -72,7 +53,7 @@ jobs:
                           content = f.read()
                           urls = re.findall(rb'https?://[^\s<>"]+|www\.[^\s<>"]+', content)
                           for u in urls:
-                              url_str = u.decode('utf-8', errors('ignore'))
+                              url_str = u.decode('utf-8', errors='ignore')
                               if not any(d in url_str for d in ignored):
                                   found_urls.add(url_str)
                   except:
