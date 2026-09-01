@@ -1,45 +1,40 @@
-name: Extract Flutter API Routes
+name: Search and Extract Endpoints
+
 on:
   workflow_dispatch:
+
 jobs:
-  extract:
+  extract-and-find:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-      - run: |
-          import zipfile, os, re
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-          zip_files = [f for f in os.listdir('.') if f.endswith('.zip') and 'Airvoy' in f]
-          if not zip_files: exit(1)
+      - name: Extract ZIP and Search for URLs/Endpoints
+        run: |
+          echo "[*] جاري فحص الملف المضغوط..."
           
-          extract_dir = "extracted_apk"
-          os.makedirs(extract_dir, exist_ok=True)
-          with zipfile.ZipFile(zip_files[0], 'r') as z:
-              z.extractall(extract_dir)
+          # فحص الملف المضغوط الموجود بالمستودع
+          ZIP_FILE=$(find . -name "*.zip" | head -n 1)
+          echo "[*] اسم الملف المعثور عليه: $ZIP_FILE"
+          
+          if [ -z "$ZIP_FILE" ]; then
+            echo "[-] لم يتم العثور على أي ملف مضغوط!"
+            exit 1
+          fi
 
-          api_routes = set()
-
-          for root, dirs, files in os.walk(extract_dir):
-              for file in files:
-                  try:
-                      file_path = os.path.join(root, file)
-                      with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                          content = f.read()
-                          # البحث عن أي مسارات برمجيّة أو نسبية للـ API مثل /api/... أو /v1/...
-                          matches = re.findall(r'["\'](/[a-zA-Z0-9_\-/]+(?:api|v[0-9]|auth|login|signin|user|account)[a-zA-Z0-9_\-/]*)["\']', content, re.IGNORECASE)
-                          for m in matches:
-                              if len(m) > 4:
-                                  api_routes.add(m)
-                  except:
-                      pass
-
-          print("\n" + "="*60)
-          print(f"🎯 FOUND API ROUTES ({len(api_routes)} found):")
-          print("="*60)
-          for r in sorted(api_routes):
-              print(r)
-          print("="*60)
-        shell: python
+          # إنتاج مجلد وفك الضغط داخله
+          mkdir -p extracted_files
+          unzip -q "$ZIP_FILE" -d extracted_files/
+          
+          echo "========================================="
+          echo "[+] نتائج البحث عن الروابط والـ Endpoints:"
+          echo "========================================="
+          
+          # البحث عن أي روابط http أو https أو مسارات مريبة داخل الملفات المستخرجة
+          grep -rnE "https?://[a-zA-Z0-9.-]+" extracted_files/ || echo "[-] لم يتم العثور على روابط مباشرة."
+          
+          echo "========================================="
+          echo "[+] البحث عن كلمات مفتاحية مثل api, login, render, v1:"
+          echo "========================================="
+          grep -rnwiE "api|login|render|v1|auth|u5iV1" extracted_files/ || echo "[-] لم يتم العثور على الكلمات المفتاحية."
