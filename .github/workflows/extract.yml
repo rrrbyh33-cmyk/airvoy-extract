@@ -1,63 +1,55 @@
-name: Extract Clean API URLs to Console
-
+name: Extract API Endpoints Focused
 on:
   workflow_dispatch:
-
 jobs:
   extract:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-
-      - name: Extract and Scan APK
-        run: |
-          import zipfile
-          import os
-          import re
+      - run: |
+          import zipfile, os, re
 
           zip_files = [f for f in os.listdir('.') if f.endswith('.zip') and 'Airvoy' in f]
-          if not zip_files:
-              print("No zip found!")
-              exit(1)
-              
-          target_zip = zip_files[0]
+          if not zip_files: exit(1)
+          
           extract_dir = "extracted_apk"
           os.makedirs(extract_dir, exist_ok=True)
+          with zipfile.ZipFile(zip_files[0], 'r') as z:
+              z.extractall(extract_dir)
 
-          with zipfile.ZipFile(target_zip, 'r') as zip_ref:
-              zip_ref.extractall(extract_dir)
+          found_endpoints = set()
+          # نمط للبحث عن الروابط أو المسارات النصية التي تحتوي على كلمات مفتاحية للـ API
+          keywords = ["api", "login", "auth", "v1", "v2", "user", "account", "token", "gateway"]
 
-          found_urls = set()
-          ignored = ["android.com", "w3.org", "google.com", "googleapis.com", "example.com", "adobe.com", "schema.org", "pki.goog", "iptc.org", "github.com"]
-
-          # بحث بسيط ونظيف عن الروابط النصية الصريحة داخل كل الملفات
           for root, dirs, files in os.walk(extract_dir):
               for file in files:
-                  try:
-                      file_path = os.path.join(root, file)
-                      # نقرأ الملف كنص مع تجاهل البايتات التالفة لضمان عدم ظهور رموز غريبة
-                      with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                          content = f.read()
-                          # استخراج الروابط بجميع أنواعها
-                          urls = re.findall(r'https?://[^\s<>"\']+|www\.[^\s<>"\']+', content)
-                          for u in urls:
-                              # تنظيف الروابط من أي رموز إضافية علوية أو جانبية
-                              clean_u = u.strip().rstrip('.,;:)]}\'"')
-                              if len(clean_u) > 8 and not any(d in clean_u for d in ignored):
-                                  found_urls.add(clean_u)
-                  except:
-                      pass
+                  if file.endswith(('.xml', '.json', '.smali', '.properties', '.txt', '.js')):
+                      try:
+                          file_path = os.path.join(root, file)
+                          with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                              content = f.read()
+                              # البحث عن الروابط الكاملة
+                              urls = re.findall(r'https?://[^\s<>"\']+', content)
+                              for u in urls:
+                                  u_clean = u.strip().rstrip('.,;:)]}\'"')
+                                  if any(k in u_clean.lower() for k in keywords) and not 'android' in u_clean and not 'google' in u_clean:
+                                      found_endpoints.add(u_clean)
+                              
+                              # البحث عن المسارات النسبية للـ API (مثل /api/v1/login)
+                              paths = re.findall(r'["\'](/api/[^\s<>"\']+|/[a-zA-Z0-9_/.-]*(?:login|auth|v1)[^\s<>"\']*)["\']', content)
+                              for p in paths:
+                                  if len(p) > 4:
+                                      found_endpoints.add(p)
+                      except:
+                          pass
 
           print("\n" + "="*60)
-          print(f"🎯 FOUND {len(found_urls)} CLEAN API/LOGIN URLS:")
+          print(f"🎯 TARGET API & LOGIN ENDPOINTS ({len(found_endpoints)} found):")
           print("="*60)
-          for u in sorted(found_urls):
-              print(u)
+          for ep in sorted(found_endpoints):
+              print(ep)
           print("="*60)
         shell: python
