@@ -10,31 +10,19 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Extract ZIP and Search for URLs/Endpoints
+      - name: Extract APK Strings and Search
         run: |
-          echo "[*] جاري فحص الملف المضغوط..."
-          
-          # فحص الملف المضغوط الموجود بالمستودع
+          echo "[*] جاري البحث عن ملف الـ APK..."
           ZIP_FILE=$(find . -name "*.zip" | head -n 1)
-          echo "[*] اسم الملف المعثور عليه: $ZIP_FILE"
-          
-          if [ -z "$ZIP_FILE" ]; then
-            echo "[-] لم يتم العثور على أي ملف مضغوط!"
-            exit 1
-          fi
-
-          # إنتاج مجلد وفك الضغط داخله
           mkdir -p extracted_files
           unzip -q "$ZIP_FILE" -d extracted_files/
           
-          echo "========================================="
-          echo "[+] نتائج البحث عن الروابط والـ Endpoints:"
-          echo "========================================="
-          
-          # البحث عن أي روابط http أو https أو مسارات مريبة داخل الملفات المستخرجة
-          grep -rnE "https?://[a-zA-Z0-9.-]+" extracted_files/ || echo "[-] لم يتم العثور على روابط مباشرة."
+          APK_FILE=$(find extracted_files/ -name "*.apk" | head -n 1)
+          echo "[*] تم العثور على ملف APK: $APK_FILE"
           
           echo "========================================="
-          echo "[+] البحث عن كلمات مفتاحية مثل api, login, render, v1:"
+          echo "[+] استخراج النصوص والروابط من الـ APK:"
           echo "========================================="
-          grep -rnwiE "api|login|render|v1|auth|u5iV1" extracted_files/ || echo "[-] لم يتم العثور على الكلمات المفتاحية."
+          
+          # استخراج النصوص الصريحة والبحث عن الروابط والكلمات المفتاحية
+          strings "$APK_FILE" | grep -iE "https?://|api|login|render|auth|v1|u5iV1" || echo "[-] لم يتم العثور على مطابقات."
