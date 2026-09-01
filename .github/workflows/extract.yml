@@ -1,46 +1,58 @@
-name: Direct APK Extractor
+name: Merge and Extract Split APK
 
 on:
   workflow_dispatch:
-    inputs:
-      apk_url:
-        description: 'خلي رابط التحميل المباشر هنا'
-        required: true
-        type: string
 
 jobs:
   extract:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Download & Extract APK
+      - name: Merge and Extract APK
         run: |
-          import urllib.request
           import zipfile
-          import re
           import os
+          import re
 
-          url = "${{ github.event.inputs.apk_url }}"
-          print(f"📥 Downloading from: {url}")
-          
-          apk_path = "app.apk"
-          headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-          req = urllib.request.Request(url, headers=headers)
-          
-          with urllib.request.urlopen(req) as response, open(apk_path, 'wb') as out_file:
-              out_file.write(response.read())
-          print("✅ Download complete!")
+          print("🔍 Looking for split archive parts...")
+          # البحث عن أجزاء الملف المرفوعة
+          parts = sorted([f for f in os.listdir('.') if 'Airvoy' in f and (f.endswith('.zip') or '.z' in f)])
+          print(f"📦 Found parts: {parts}")
+
+          # دمج الأجزاء بملف زيب واحد رئيسي
+          merged_zip = "combined_airvoy.zip"
+          print("🔄 Merging parts together...")
+          with open(merged_zip, 'wb') as outfile:
+              # عادة الـ .zip يكون الأخير أو يتم دمجهم بترتيب الأجزاء
+              for part in parts:
+                  print(f"Adding {part}...")
+                  with open(part, 'rb') as infile:
+                      outfile.write(infile.read())
+
+          print("✅ Merge complete!")
 
           extract_dir = "extracted_apk"
           os.makedirs(extract_dir, exist_ok=True)
 
-          print("📦 Extracting APK...")
-          with zipfile.ZipFile(apk_path, 'r') as zip_ref:
-              zip_ref.extractall(extract_dir)
+          print("📦 Extracting ZIP/APK...")
+          try:
+              with zipfile.ZipFile(merged_zip, 'r') as zip_ref:
+                  zip_ref.extractall(extract_dir)
+              print("✅ Extraction complete!")
+          except Exception as e:
+              print(f"⚠️ Direct zip extraction note: {e}")
+              # لو كان الملف مجرد أرشيف متقطع يحتاج أداة خارجية، نبحث عن أي ملف داخلي ونستخرجه
+              for root, dirs, files in os.walk(extract_dir):
+                  for file in files:
+                      if file.endswith('.apk'):
+                          print(f"Found APK inside: {file}")
 
           print("🔍 Scanning for API & Login Endpoints...")
           found_urls = set()
@@ -49,7 +61,8 @@ jobs:
           for root, dirs, files in os.walk(extract_dir):
               for file in files:
                   try:
-                      with open(os.path.join(root, file), "rb") as f:
+                      file_path = os.path.join(root, file)
+                      with open(file_path, "rb") as f:
                           content = f.read()
                           urls = re.findall(rb'https?://[^\s<>"]+|www\.[^\s<>"]+', content)
                           for u in urls:
