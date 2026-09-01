@@ -1,4 +1,4 @@
-name: Extract and Save URLs to File
+name: Extract and Save Clean URLs
 
 on:
   workflow_dispatch:
@@ -33,7 +33,10 @@ jobs:
               zip_ref.extractall(extract_dir)
 
           found_urls = set()
-          ignored = ["android.com", "w3.org", "google.com", "googleapis.com", "example.com", "adobe.com", "schema.org"]
+          ignored = ["android.com", "w3.org", "google.com", "googleapis.com", "example.com", "adobe.com", "schema.org", "pki.goog", "iptc.org"]
+
+          # تعبير نمطي دقيق جداً لالتقاط الروابط الصافية حصراً
+          url_pattern = re.compile(rb'https?://[a-zA-Z0-9][-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)')
 
           for root, dirs, files in os.walk(extract_dir):
               for file in files:
@@ -41,23 +44,27 @@ jobs:
                       file_path = os.path.join(root, file)
                       with open(file_path, "rb") as f:
                           content = f.read()
-                          urls = re.findall(rb'https?://[^\s<>"]+|www\.[^\s<>"]+', content)
-                          for u in urls:
-                              url_str = u.decode('utf-8', errors='ignore')
-                              if not any(d in url_str for d in ignored):
-                                  found_urls.add(url_str)
+                          matches = url_pattern.findall(content)
+                          for m in matches:
+                              # استخراج الرابط الكامل وتصحيحه
+                              full_match = re.search(rb'https?://[^\s<>"\']+', m if b'http' in m else b'http://' + m)
+                              if full_match:
+                                  url_str = full_match.group(0).decode('utf-8', errors='ignore').strip()
+                                  # تنظيف الرموز الزائدة بالنهاية
+                                  url_str = re.sub(r'[\),\]\}]+$', '', url_str)
+                                  if len(url_str) > 10 and not any(d in url_str for d in ignored):
+                                      found_urls.add(url_str)
                   except:
                       pass
 
-          # حفظ الروابط في ملف نصي
           with open("urls.txt", "w", encoding="utf-8") as out:
               for u in sorted(found_urls):
                   out.write(u + "\n")
-          print("✅ Done writing URLs to urls.txt")
+          print(f"✅ Found {len(found_urls)} clean URLs.")
         shell: python
 
       - name: Upload URLs Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: airvoy-endpoints
+          name: airvoy-clean-endpoints
           path: urls.txt
