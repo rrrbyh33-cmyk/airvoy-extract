@@ -1,66 +1,81 @@
-name: Telegram Bot APK Extractor
+name: Extract from Google Play
 
 on:
   workflow_dispatch:
-    inputs:
-      direct_apk_url:
-        description: 'رابط تليجرام المباشر للملف'
-        required: true
-        type: string
 
 jobs:
   extract:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Download and Extract APK
+      - name: Install Google Play Scraper
         run: |
-          import urllib.request
+          pip install google-play-scraper
+
+      - name: Download & Extract APK from Google Play
+        run: |
+          import os
           import zipfile
           import re
-          import os
+          from google_play_scraper import app
+          import urllib.request
 
-          url = "${{ github.event.inputs.direct_apk_url }}"
-          print(f"📥 Downloading APK from direct link...")
+          # حزمة تطبيق Airvoy في المتجر
+          package_name = "com.airvoy.airvoy"
+          print(f"🔍 Looking up {package_name} on Google Play...")
           
+          try:
+              # جلب معلومات التطبيق ورابط التحميل المباشر إن توفر، أو نستخدم أداة سحب بديلة
+              result = app(package_name, lang='en', country='us')
+              print(f"📱 App Name: {result.get('title')}")
+              print(f"📦 Version: {result.get('version')}")
+          except Exception as e:
+              print(f"⚠️ Note: {e}")
+
+          # بما أن متجر جوجل لا يعطي رابط مباشر للتحميل السريع بدون حساب، 
+          # الأسهل نستخدم رابط بديل موثوق لسحب ملف الـ APK عبر حزم الـ APK Downloader APIs
+          apk_download_url = f"https://d.apkpure.com/b/APK/{package_name}?version=latest"
+          
+          print(f"📥 Downloading APK from mirror...")
           apk_path = "app.apk"
-          urllib.request.urlretrieve(url, apk_path)
-          print("✅ Download complete!")
+          
+          headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+          req = urllib.request.Request(apk_download_url, headers=headers)
+          
+          try:
+              with urllib.request.urlopen(req) as response, open(apk_path, 'wb') as out_file:
+                  out_file.write(response.read())
+              print("✅ Download complete!")
+          except Exception as e:
+              print(f"❌ Failed to download: {e}")
+              exit(1)
 
           extract_dir = "extracted_apk"
           os.makedirs(extract_dir, exist_ok=True)
 
-          print("📦 Extracting APK contents...")
+          print("📦 Extracting APK...")
           with zipfile.ZipFile(apk_path, 'r') as zip_ref:
               zip_ref.extractall(extract_dir)
 
-          print("🔍 Scanning for API and Login endpoints...")
+          print("🔍 Scanning for API & Login Endpoints...")
           found_urls = set()
-          ignored_domains = [
-              "android.com", "w3.org", "google.com", "googleapis.com", 
-              "example.com", "adobe.com", "schema.org", "unity3d.com",
-              "vungle.com", "bytedance.com", "dashif.org", "tizen.org"
-          ]
+          ignored = ["android.com", "w3.org", "google.com", "googleapis.com", "example.com", "adobe.com", "schema.org"]
 
           for root, dirs, files in os.walk(extract_dir):
               for file in files:
-                  file_path = os.path.join(root, file)
                   try:
-                      with open(file_path, "rb") as f:
+                      with open(os.path.join(root, file), "rb") as f:
                           content = f.read()
                           urls = re.findall(rb'https?://[^\s<>"]+|www\.[^\s<>"]+', content)
                           for u in urls:
-                              url_str = u.decode('utf-8', errors='ignore')
-                              if not any(domain in url_str for domain in ignored_domains):
+                              url_str = u.decode('utf-8', errors('ignore'))
+                              if not any(d in url_str for d in ignored):
                                   found_urls.add(url_str)
-                  except Exception:
+                  except:
                       pass
 
           print("\n" + "="*50)
