@@ -1,80 +1,41 @@
-name: Full APK Deep Scanner Clean
+name: Extract Exact Login Endpoints
 
 on:
   workflow_dispatch:
 
 jobs:
-  scan:
+  extract-urls:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Run Clean Scanner Script
+      - name: Grep URLs from Target JS Files
         run: |
           python3 -c '
-          import os
-          import zipfile
+          import os, zipfile, re
 
-          print("[*] بدء الفحص الشامل بنظام تنقية النصوص...")
+          # فك الملفات إذا لم تكن مفكوكة
           zip_files = [f for f in os.listdir(".") if f.endswith(".zip")]
-          if not zip_files:
-              print("[-] لم يتم العثور على ملف مضغوط.")
-              exit(1)
+          if zip_files:
+              with zipfile.ZipFile(zip_files[0], "r") as zf:
+                  zf.extractall("extracted_zip")
 
-          with zipfile.ZipFile(zip_files[0], "r") as zf:
-              zf.extractall("extracted_zip")
-
-          apk_files = []
           for root, dirs, files in os.walk("extracted_zip"):
               for file in files:
                   if file.endswith(".apk"):
-                      apk_files.append(os.path.join(root, file))
+                      with zipfile.ZipFile(os.path.join(root, file), "r") as apk_z:
+                          apk_z.extractall("unpacked_apk_sources")
 
-          if not apk_files:
-              print("[-] لم يتم العثور على ملف APK.")
-              exit(1)
-
-          apk_path = apk_files[0]
-          unpacked_dir = "unpacked_apk_sources"
-          os.makedirs(unpacked_dir, exist_ok=True)
-          with zipfile.ZipFile(apk_path, "r") as apk_z:
-              apk_z.extractall(unpacked_dir)
-          
-          keywords = [
-              "login", "signin", "auth", "token", "password", 
-              "u5iV1", "render.com", "api", "base_url", "endpoint",
-              "firebase", "identitytoolkit", "oauth"
-          ]
-          
-          results = []
-          for root, dirs, files in os.walk(unpacked_dir):
-              for file in files:
-                  if file.endswith((".js", ".json", ".xml", ".txt", ".html")):
-                      file_path = os.path.join(root, file)
-                      try:
-                          with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                              lines = f.readlines()
-                              for line_num, line in enumerate(lines, 1):
-                                  for kw in keywords:
-                                      if kw in line.lower():
-                                          results.append(f"الملف: {file_path} (السطر: {line_num})\nالمحتوى: {line.strip()}\n" + "-"*40)
-                      except Exception:
-                          pass
-
-          report_file = "scan_results_clean.txt"
-          with open(report_file, "w", encoding="utf-8") as report:
-              report.write("=== تقرير مسح مسارات تسجيل الدخول والروابط النظيف ===\n\n")
-              if results:
-                  report.write("\n".join(results[:500])) # أول 500 نتيجة حتى يكون الملف واضح ومقروء
-              else:
-                  report.write("لم يتم العثور على نتائج مطابقة.\n")
-
-          print(f"[تم الانتهاء] حفظ التقرير النظيف في: {report_file}")
+          target_file = "unpacked_apk_sources/assets/ad-viewer/adViewer.366d40a1.js"
+          if os.path.exists(target_file):
+              print(f"=== فحص الملف الأساسي: {target_file} ===")
+              with open(target_file, "r", encoding="utf-8", errors="ignore") as f:
+                  content = f.read()
+                  # البحث عن أي رابط أو مسار API داخل الملف
+                  urls = re.findall(r"https?://[^\s\"<>]+|/[a-zA-Z0-9_/-]+(?:api|auth|login|v1)[^\s\"<>]*", content)
+                  for u in sorted(set(urls)):
+                      print(f"[رابط مكتشف]: {u}")
+          else:
+              print("[-] لم يتم العثور على الملف بالمجلد المحدد.")
           '
-
-      - name: Upload Clean Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: airvoy-clean-results
-          path: scan_results_clean.txt
