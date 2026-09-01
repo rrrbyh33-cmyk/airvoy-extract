@@ -1,4 +1,4 @@
-name: Extract API Endpoints Focused
+name: Extract All Strings and Endpoints
 on:
   workflow_dispatch:
 jobs:
@@ -21,33 +21,24 @@ jobs:
               z.extractall(extract_dir)
 
           found_endpoints = set()
-          # نمط للبحث عن الروابط أو المسارات النصية التي تحتوي على كلمات مفتاحية للـ API
-          keywords = ["api", "login", "auth", "v1", "v2", "user", "account", "token", "gateway"]
 
           for root, dirs, files in os.walk(extract_dir):
               for file in files:
-                  if file.endswith(('.xml', '.json', '.smali', '.properties', '.txt', '.js')):
-                      try:
-                          file_path = os.path.join(root, file)
-                          with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                              content = f.read()
-                              # البحث عن الروابط الكاملة
-                              urls = re.findall(r'https?://[^\s<>"\']+', content)
-                              for u in urls:
-                                  u_clean = u.strip().rstrip('.,;:)]}\'"')
-                                  if any(k in u_clean.lower() for k in keywords) and not 'android' in u_clean and not 'google' in u_clean:
-                                      found_endpoints.add(u_clean)
-                              
-                              # البحث عن المسارات النسبية للـ API (مثل /api/v1/login)
-                              paths = re.findall(r'["\'](/api/[^\s<>"\']+|/[a-zA-Z0-9_/.-]*(?:login|auth|v1)[^\s<>"\']*)["\']', content)
-                              for p in paths:
-                                  if len(p) > 4:
-                                      found_endpoints.add(p)
-                      except:
-                          pass
+                  try:
+                      file_path = os.path.join(root, file)
+                      with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                          content = f.read()
+                          # استخراج أي شيء يبدأ بـ http أو https بطول مقبول
+                          urls = re.findall(r'https?://[^\s<>"\']+', content)
+                          for u in urls:
+                              u_clean = u.strip().rstrip('.,;:)]}\'"')
+                              if len(u_clean) > 10 and not any(x in u_clean.lower() for x in ['android.com', 'w3.org', 'google', 'github', 'schema', 'example']):
+                                  found_endpoints.add(u_clean)
+                  except:
+                      pass
 
           print("\n" + "="*60)
-          print(f"🎯 TARGET API & LOGIN ENDPOINTS ({len(found_endpoints)} found):")
+          print(f"🎯 ALL FOUND URLS ({len(found_endpoints)} found):")
           print("="*60)
           for ep in sorted(found_endpoints):
               print(ep)
